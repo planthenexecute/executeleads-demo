@@ -144,7 +144,7 @@
   //   ?n=Kenny&biz=K%26M+Hauling&trade=junk+removal&city=Sacramento&spend=900
   // NOTE: this MUST be an "embed"-channel deployment. A "landing-page" channel deployment returns
   // "Couldn't load this PAL" in <tavus-embed>.
-  const DEPLOYMENT = "7a2b0352-97aa-4540-89b3-d26644047a80";
+  const DEPLOYMENT = "96d5ab8b-f123-4fbb-9d9d-221e547b5970";
   const q = new URLSearchParams(location.search);
   const first = (q.get("n") || "").trim();
   const biz   = (q.get("biz") || "").trim();
@@ -188,10 +188,11 @@
     const name = first || "there";
     // Hook "B" — humor-forward, self-aware, flips the "it's a robot" weirdness into the pitch.
     return `Hey ${name} — quick confession before we start. I'm not the real Angel... I'm his AI. ` +
-      `Same face, same voice, little better-looking, but don't tell him I said that. He's on a call. ` +
-      `Real quick, I'm recording this so he can watch it back, cool? So — me being a robot? ` +
-      `That's the whole pitch. When a customer hits your Yelp at 9pm on a Sunday, real Angel's asleep. ` +
-      `I'm not. That's the thing this does.`;
+      `Same face, same voice, little better-looking, but don't tell him I said that. The real Angel's ` +
+      `out running the business — which is kind of the whole point, right? I handle stuff like this so ` +
+      `he can go run the company. Real quick, I'm recording this so he can watch it back, cool? ` +
+      `So — me being a robot? That's the pitch. When a customer hits your Yelp at 9pm on a Sunday, ` +
+      `the real Angel's asleep. I'm not. That's what this does for you.`;
   }
 
   // ---- Proof reel: the avatar drives this via tool calls ----
