@@ -47,7 +47,23 @@
     box-shadow:0 30px 80px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(255,215,0,.05) inset;
   }
   /* the tavus embed fills the stage once mounted */
-  .stage tavus-embed, .stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+  .stage tavus-embed, .stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;
+    transition:all .5s cubic-bezier(.4,0,.2,1)}
+
+  /* PROOF REEL — when the avatar calls present_conversation, it shrinks to a Loom-style corner
+     and a real conversation screenshot takes the stage and slowly scrolls. */
+  .reel{position:absolute;inset:0;overflow:hidden;background:#0a0f1c;opacity:0;pointer-events:none;
+    transition:opacity .4s ease;z-index:1}
+  .reel .scroller{position:absolute;inset:0;overflow:hidden}
+  .reel img{width:100%;display:block;will-change:transform}
+  .reel .tag{position:absolute;top:12px;left:12px;z-index:3;font-size:12px;color:var(--gold);
+    background:rgba(11,16,32,.8);border:1px solid rgba(255,215,0,.25);border-radius:999px;
+    padding:6px 12px;font-weight:600;backdrop-filter:blur(6px)}
+  .stage.presenting .reel{opacity:1;pointer-events:auto}
+  .stage.presenting tavus-embed, .stage.presenting iframe{
+    inset:auto 14px 14px auto;width:clamp(180px,26vw,300px);aspect-ratio:16/9;height:auto;
+    border-radius:12px;border:2px solid rgba(255,215,0,.35);box-shadow:0 16px 40px -12px rgba(0,0,0,.9);
+    z-index:2;overflow:hidden}
 
   .gate{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     text-align:center;padding:clamp(20px,5vw,44px);gap:16px;
@@ -88,6 +104,10 @@
 
 <main>
   <div class="stage" id="stage">
+    <div class="reel" id="reel" aria-hidden="true">
+      <div class="tag" id="reeltag">Real ExecuteLeads conversation</div>
+      <div class="scroller"><img id="reelimg" alt="Real client conversation" /></div>
+    </div>
     <div class="gate" id="gate">
       <h1>Your demo with <em>Angel</em></h1>
       <p id="blurb">
@@ -174,6 +194,63 @@
       `I'm not. That's the thing this does.`;
   }
 
+  // ---- Proof reel: the avatar drives this via tool calls ----
+  const REELS = {
+    stucco: { img: "assets/reel_stucco.png", tag: "Real conversation · Duarte's Plastering (stucco)" },
+    hvac:   { img: "assets/reel_hvac.png",   tag: "Real conversation · One Season Heating & Air" },
+  };
+  const stage   = document.getElementById("stage");
+  const reel     = document.getElementById("reel");
+  const reelImg  = document.getElementById("reelimg");
+  const reelTag  = document.getElementById("reeltag");
+  const scroller = reel.querySelector(".scroller");
+  let scrollRAF = null;
+
+  function autoScroll(){
+    // Slow, steady top→bottom crawl so the narration ("...and here's the escalation") lands as the
+    // bottom of the thread comes into view. ~46s feels like a human scrolling, not a machine.
+    cancelAnimationFrame(scrollRAF);
+    const DURATION = 46000;
+    let startT = null;
+    const max = () => Math.max(0, reelImg.offsetHeight - scroller.clientHeight);
+    function step(t){
+      if (startT === null) startT = t;
+      const p = Math.min(1, (t - startT) / DURATION);
+      // ease-in-out so it drifts in and settles, rather than a constant robotic pan
+      const eased = p < .5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;
+      reelImg.style.transform = `translateY(${-eased * max()}px)`;
+      if (p < 1) scrollRAF = requestAnimationFrame(step);
+    }
+    reelImg.style.transform = "translateY(0)";
+    scrollRAF = requestAnimationFrame(step);
+  }
+
+  function present(which){
+    const r = REELS[which] || REELS.stucco;
+    reelTag.textContent = r.tag;
+    // only (re)load + rescroll if it's a different image
+    if (!reelImg.src.endsWith(r.img)) {
+      reelImg.onload = autoScroll;
+      reelImg.src = r.img;
+    } else {
+      autoScroll();
+    }
+    stage.classList.add("presenting");
+    reel.setAttribute("aria-hidden", "false");
+  }
+  function endPresent(){
+    stage.classList.remove("presenting");
+    reel.setAttribute("aria-hidden", "true");
+    cancelAnimationFrame(scrollRAF);
+  }
+
+  function onToolCall(e){
+    const name = e.detail?.name;
+    const args = e.detail?.arguments || {};
+    if (name === "present_conversation") present(args.example || "stucco");
+    else if (name === "end_presentation") endPresent();
+  }
+
   document.getElementById("start").addEventListener("click", () => {
     const el = document.createElement("tavus-embed");
     el.setAttribute("deployment-id", DEPLOYMENT);
@@ -181,8 +258,12 @@
     const ctx = buildContext();
     if (ctx) el.setAttribute("conversational-context", ctx);
     document.getElementById("gate").remove();
-    document.getElementById("stage").appendChild(el);
+    stage.appendChild(el);
     document.getElementById("livetext").textContent = "Live with Angel";
+
+    // tool-call events bubble from the embed's shadow DOM; listen on the element and document
+    el.addEventListener("tavus:tool-call", onToolCall);
+    document.addEventListener("tavus:tool-call", onToolCall);
   });
 </script>
 </body>
