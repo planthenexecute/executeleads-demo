@@ -7,7 +7,6 @@
 <meta name="robots" content="noindex">
 <meta property="og:title" content="Your ExecuteLeads demo — with Angel">
 <meta property="og:description" content="A 10-minute walkthrough of the AI that answers your Yelp leads. No signup.">
-<meta property="og:image" content="https://executeleads.ai/og.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
@@ -47,10 +46,9 @@
     border:1px solid var(--line);background:var(--panel);
     box-shadow:0 30px 80px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(255,215,0,.05) inset;
   }
-  .stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+  /* the tavus embed fills the stage once mounted */
+  .stage tavus-embed, .stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
 
-  /* Pre-join gate. Autoplay + mic/cam permission both want a real user gesture, and a contractor
-     who lands on a page that instantly demands his camera closes the tab. So: explain first, ask second. */
   .gate{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     text-align:center;padding:clamp(20px,5vw,44px);gap:16px;
     background:radial-gradient(700px 400px at 50% 0%, rgba(255,215,0,.06), transparent 70%),var(--panel)}
@@ -78,13 +76,7 @@
   footer a{color:var(--gold);text-decoration:none;font-weight:600}
   footer a:hover{text-decoration:underline}
 
-  .err{color:#ffb4b4;background:rgba(110,6,11,.35);border:1px solid rgba(255,120,120,.25);
-    padding:14px 18px;border-radius:12px;max-width:44ch;line-height:1.5;font-size:14px}
-
-  @media (max-width:640px){
-    body{padding:12px}
-    .stage{border-radius:12px}
-  }
+  @media (max-width:640px){ body{padding:12px} .stage{border-radius:12px} }
 </style>
 </head>
 <body>
@@ -123,39 +115,74 @@
   <span>Rather talk to the real Angel? <a href="https://planthenexecute.hbportal.co/schedule" target="_blank" rel="noopener">Book 15 minutes →</a></span>
 </footer>
 
+<!-- async so a slow CDN never blocks the inline handler below -->
+<script async src="https://unpkg.com/@tavus/embed"></script>
 <script>
-  // The conversation id is minted server-side and handed out in the link, so no API key ever
-  // touches the browser. ?c=<conversation_id>
-  const params = new URLSearchParams(location.search);
-  const conv   = params.get('c');
-  const name   = params.get('n');
+  // ONE reusable link. The deployment mints a fresh conversation per visitor server-side, so
+  // there's no per-call API key in the browser and nothing to pre-generate. Personalization is
+  // optional URL params, turned into the embed's per-visitor greeting + context:
+  //   ?n=Kenny&biz=K%26M+Hauling&trade=junk+removal&city=Sacramento&spend=900
+  // NOTE: this MUST be an "embed"-channel deployment. A "landing-page" channel deployment returns
+  // "Couldn't load this PAL" in <tavus-embed>.
+  const DEPLOYMENT = "f73416db-6f28-4bc9-b468-41b10e19b4c1";
+  const q = new URLSearchParams(location.search);
+  const first = (q.get("n") || "").trim();
+  const biz   = (q.get("biz") || "").trim();
+  const trade = (q.get("trade") || "").trim();
+  const city  = (q.get("city") || "").trim();
+  const spend = (q.get("spend") || "").trim();
 
-  const gate = document.getElementById('gate');
-  const stage = document.getElementById('stage');
-  const btn  = document.getElementById('start');
-  const livetext = document.getElementById('livetext');
+  // Tier lookup — mirrors the ladder the avatar must use. Kept here only so the CONTEXT it
+  // receives is already correct; the avatar still states the price itself.
+  function tier(s){
+    const n = parseInt(s, 10);
+    if (isNaN(n)) return "unknown — ASK before quoting";
+    if (n < 1000)  return "$247/mo (month one $494 with onboarding)";
+    if (n < 10000) return "$395/mo (month one $790 with onboarding)";
+    return "$985/mo (onboarding waived)";
+  }
 
-  if (name) {
-    document.getElementById('blurb').innerHTML =
-      `Ten minutes, ${name}. He'll show you how the AI answers your Yelp leads the second they ` +
+  if (first) {
+    document.getElementById("blurb").innerHTML =
+      `Ten minutes, ${first}. He'll show you how the AI answers your Yelp leads the second they ` +
       `come in — nights, weekends, while you're on a job. Ask him anything.`;
   }
 
-  if (!conv) {
-    gate.innerHTML = `<div class="err"><strong>This demo link is missing its ID.</strong><br>
-      Ask Angel to resend it — or just <a href="https://planthenexecute.hbportal.co/schedule"
-      style="color:var(--gold)">book 15 minutes with the real one</a>.</div>`;
+  function buildContext(){
+    if (!first && !biz) return "";  // generic visitor — let the persona open on its own
+    const lines = [
+      "THE PERSON YOU ARE TALKING TO RIGHT NOW:",
+      first ? `  Name: ${first}` : "",
+      biz   ? `  Business: ${biz}` : "",
+      trade ? `  Trade: ${trade}` : "",
+      city  ? `  City: ${city}` : "",
+      `  Known Yelp ad spend: ${spend || "UNKNOWN — you must ask before you quote"}`,
+      spend ? `  Their tier if that's right: ${tier(spend)}` : "",
+      "Open by name and business. You have NOT seen their Yelp profile, reviews, response time, or ",
+      "competitors — if you need any of that, say you can't see it and book the real Angel.",
+    ];
+    return lines.filter(Boolean).join("\n");
   }
 
-  btn?.addEventListener('click', () => {
-    const f = document.createElement('iframe');
-    f.src = `https://tavus.daily.co/${conv}`;
-    // Daily needs these or the mic never opens and the call silently does nothing.
-    f.allow = 'camera; microphone; autoplay; display-capture; fullscreen; speaker-selection';
-    f.allowFullscreen = true;
-    stage.appendChild(f);
-    gate.remove();
-    livetext.textContent = 'Live with Angel';
+  function buildGreeting(){
+    const name = first || "there";
+    // Hook "B" — humor-forward, self-aware, flips the "it's a robot" weirdness into the pitch.
+    return `Hey ${name} — quick confession before we start. I'm not the real Angel... I'm his AI. ` +
+      `Same face, same voice, little better-looking, but don't tell him I said that. He's on a call. ` +
+      `Real quick, I'm recording this so he can watch it back, cool? So — me being a robot? ` +
+      `That's the whole pitch. When a customer hits your Yelp at 9pm on a Sunday, real Angel's asleep. ` +
+      `I'm not. That's the thing this does.`;
+  }
+
+  document.getElementById("start").addEventListener("click", () => {
+    const el = document.createElement("tavus-embed");
+    el.setAttribute("deployment-id", DEPLOYMENT);
+    el.setAttribute("custom-greeting", buildGreeting());
+    const ctx = buildContext();
+    if (ctx) el.setAttribute("conversational-context", ctx);
+    document.getElementById("gate").remove();
+    document.getElementById("stage").appendChild(el);
+    document.getElementById("livetext").textContent = "Live with Angel";
   });
 </script>
 </body>
