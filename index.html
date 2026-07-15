@@ -244,11 +244,27 @@
     cancelAnimationFrame(scrollRAF);
   }
 
-  function onToolCall(e){
-    const name = e.detail?.name;
-    const args = e.detail?.arguments || {};
-    if (name === "present_conversation") present(args.example || "stucco");
-    else if (name === "end_presentation") endPresent();
+  // Defensive: the docs say the event is `tavus:tool-call` with detail {name, arguments}, but
+  // handle alternate shapes and dig the name/args out of whatever arrives, so a docs-vs-reality
+  // mismatch degrades to "still works" instead of "silently dead". Everything is logged so the
+  // first real test is diagnosable from the console.
+  function extractCall(detail){
+    if (!detail) return null;
+    // firehose (tavus:protocol-message) wraps the real event under .type/.data
+    const d = detail.data || detail;
+    const type = detail.type || d.type || "";
+    if (type && !/tool.?call/i.test(type)) return null;
+    const name = d.name || d.tool_name || d.function?.name || d.tool || d.function_name;
+    let args = d.arguments ?? d.args ?? d.parameters ?? d.function?.arguments ?? {};
+    if (typeof args === "string") { try { args = JSON.parse(args); } catch {} }
+    return name ? { name, args } : null;
+  }
+  function handleTavusEvent(e){
+    const call = extractCall(e.detail);
+    if (!call) return;
+    console.log("[demo] tool-call:", call.name, call.args);
+    if (call.name === "present_conversation") present(call.args.example || "stucco");
+    else if (call.name === "end_presentation") endPresent();
   }
 
   document.getElementById("start").addEventListener("click", () => {
@@ -261,9 +277,16 @@
     stage.appendChild(el);
     document.getElementById("livetext").textContent = "Live with Angel";
 
-    // tool-call events bubble from the embed's shadow DOM; listen on the element and document
-    el.addEventListener("tavus:tool-call", onToolCall);
-    document.addEventListener("tavus:tool-call", onToolCall);
+    // Listen broadly — element + document, both the specific event and the firehose.
+    for (const target of [el, document]) {
+      target.addEventListener("tavus:tool-call", handleTavusEvent);
+      target.addEventListener("tavus:protocol-message", handleTavusEvent);
+    }
+    // Last-resort trace: log ANY tavus:* event so we can see the real event names if needed.
+    const trace = (e) => { if (e.type.startsWith("tavus:")) console.log("[demo] evt:", e.type, e.detail); };
+    for (const t of ["tavus:conversation-started","tavus:protocol-message","tavus:tool-call"]) {
+      document.addEventListener(t, trace);
+    }
   });
 </script>
 </body>
