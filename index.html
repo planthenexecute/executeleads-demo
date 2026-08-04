@@ -144,7 +144,7 @@
   //   ?n=Kenny&biz=K%26M+Hauling&trade=junk+removal&city=Sacramento&spend=900
   // NOTE: this MUST be an "embed"-channel deployment. A "landing-page" channel deployment returns
   // "Couldn't load this PAL" in <tavus-embed>.
-  const DEPLOYMENT = "96d5ab8b-f123-4fbb-9d9d-221e547b5970";
+  const DEPLOYMENT = "1750cb7f-b5a3-459c-b45f-7dc22666e662";
   const q = new URLSearchParams(location.search);
   const first = (q.get("n") || "").trim();
   const biz   = (q.get("biz") || "").trim();
@@ -229,6 +229,10 @@
   function present(which){
     const r = REELS[which] || REELS.stucco;
     reelTag.textContent = r.tag;
+    // If the asset isn't deployed, stay full-screen instead of shrinking to PiP
+    // beside a broken image. The avatar's narration degrades to a described
+    // example, which is survivable; a broken img mid-demo is not.
+    reelImg.onerror = () => { console.warn("[demo] reel asset missing:", r.img); endPresent(); };
     // only (re)load + rescroll if it's a different image
     if (!reelImg.src.endsWith(r.img)) {
       reelImg.onload = autoScroll;
