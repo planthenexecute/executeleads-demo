@@ -60,7 +60,25 @@
     background:rgba(11,16,32,.8);border:1px solid rgba(255,215,0,.25);border-radius:999px;
     padding:6px 12px;font-weight:600;backdrop-filter:blur(6px)}
   .stage.presenting .reel{opacity:1;pointer-events:auto}
-  .stage.presenting tavus-embed, .stage.presenting iframe{
+  /* Booking card. Added 2026-09-04: the avatar used to dictate the URL out loud,
+     which lost a lead who agreed to a day and then had nothing to tap. */
+  .booknow{position:absolute;left:50%;bottom:18px;transform:translate(-50%,140%);z-index:6;
+    display:flex;flex-direction:column;align-items:center;gap:8px;width:min(92%,440px);
+    background:rgba(11,16,32,.94);border:1px solid rgba(255,215,0,.4);border-radius:16px;
+    padding:16px 18px;box-shadow:0 24px 60px -18px rgba(0,0,0,.95);backdrop-filter:blur(8px);
+    opacity:0;pointer-events:none;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .35s}
+  .booknow.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+  .booknow .hd{font-size:13px;color:#AAB4C8;text-align:center;line-height:1.45}
+  .booknow .hd b{color:#F5F7FB}
+  .booknow a.cta{display:block;width:100%;text-align:center;text-decoration:none;
+    background:linear-gradient(105deg,#A07C10,#E8C96A 40%,#FFF0A0,#C9A84C 80%,#8A6A0A);
+    color:#0B1020;font-weight:800;font-size:17px;letter-spacing:.01em;
+    padding:14px 18px;border-radius:11px;box-shadow:0 6px 20px -6px rgba(255,215,0,.5)}
+  .booknow a.cta:hover{filter:brightness(1.07)}
+  .booknow .sub{font-size:11.5px;color:#7C879E;text-align:center}
+  @media (prefers-reduced-motion:reduce){.booknow{transition:none}}
+  .stage.presenting tavus-embed, .stage.presenting iframe,
+  .stage.booking tavus-embed, .stage.booking iframe{
     inset:auto 14px 14px auto;width:clamp(180px,26vw,300px);aspect-ratio:16/9;height:auto;
     border-radius:12px;border:2px solid rgba(255,215,0,.35);box-shadow:0 16px 40px -12px rgba(0,0,0,.9);
     z-index:2;overflow:hidden}
@@ -108,6 +126,12 @@
       <div class="tag" id="reeltag">Real ExecuteLeads conversation</div>
       <div class="scroller"><img id="reelimg" alt="Real client conversation" /></div>
     </div>
+    <div class="booknow" id="booknow" aria-hidden="true">
+      <div class="hd" id="bookhd">Grab a time with <b>the real Angel</b></div>
+      <a class="cta" id="booklink" href="https://planthenexecute.hbportal.co/schedule"
+         target="_blank" rel="noopener">Book my 15 minutes</a>
+      <div class="sub">We'll text you this link too, so you don't lose it.</div>
+    </div>
     <div class="gate" id="gate">
       <h1>Your demo with <em>Angel</em></h1>
       <p id="blurb">
@@ -144,6 +168,8 @@
   //   ?n=Kenny&biz=K%26M+Hauling&trade=junk+removal&city=Sacramento&spend=900
   // NOTE: this MUST be an "embed"-channel deployment. A "landing-page" channel deployment returns
   // "Couldn't load this PAL" in <tavus-embed>.
+  // 1750cb7f is the deployment the LIVE page serves; prompt changes go live by
+  // repointing ITS pal_id (see tavus memory: fast update path), not by pushing pages.
   const DEPLOYMENT = "1750cb7f-b5a3-459c-b45f-7dc22666e662";
   const q = new URLSearchParams(location.search);
   const first = (q.get("n") || "").trim();
@@ -270,6 +296,30 @@
     console.log("[demo] tool-call:", call.name, call.args);
     if (call.name === "present_conversation") present(call.args.example || "stucco");
     else if (call.name === "end_presentation") endPresent();
+    else if (call.name === "show_booking_link") showBooking(call.args.preferred_day || "");
+  }
+
+  // ---- Booking card: the avatar calls show_booking_link the moment they agree ----
+  const bookCard = document.getElementById("booknow");
+  const bookHd   = document.getElementById("bookhd");
+  const bookLink = document.getElementById("booklink");
+  function showBooking(day){
+    const d = (day || "").trim();
+    bookHd.innerHTML = d
+      ? `Locking in <b>${d.replace(/[<>&]/g, "")}</b> with the real Angel`
+      : 'Grab a time with <b>the real Angel</b>';
+    // Carry the lead through so the booking form isn't a cold start.
+    const u = new URL(bookLink.href);
+    if (biz)   u.searchParams.set("company", biz);
+    if (first) u.searchParams.set("name", first);
+    bookLink.href = u.toString();
+    bookCard.classList.add("show");
+    bookCard.setAttribute("aria-hidden", "false");
+    // Shrink the avatar so the button is the thing on screen, not a talking head.
+    // Deliberately NOT `presenting` — that class also un-hides the proof reel and
+    // would leave a stale screenshot sitting behind the card.
+    endPresent();
+    stage.classList.add("booking");
   }
 
   document.getElementById("start").addEventListener("click", () => {
